@@ -1,0 +1,6 @@
+D:
+cd dynamoDB_local
+java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
+
+cd db_test
+nodemon firstConnection.js
