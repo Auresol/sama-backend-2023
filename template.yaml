@@ -1,0 +1,643 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  sama-backend-aws
+
+  Sample SAM Template for sama-backend-aws
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+
+    Timeout: 180
+    Tracing: Active
+
+Parameters:
+
+  Region:
+    Description: Region
+    Type: String
+    Default: ap-northeast-2
+
+  SamaDataBucket:
+    Description: Bucket for storing all application generated file
+    Type: String
+    Default: sama-data-bucket
+
+  UserPoolStudentGroupName:
+    Description: User pool group name for Student
+    Type: String
+    Default: StudentGroup
+
+  UserPoolTeacherGroupName:
+    Description: User pool group name for Teacher
+    Type: String
+    Default: TeacherGroup 
+
+  UserPoolAdminGroupName:
+    Description: User pool group name for Admin
+    Type: String
+    Default: AdminGroup 
+
+Resources:
+
+  RestAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Dev
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt AccessLogs.Arn
+        Format: '{ "requestId":"$context.requestId", "ip": "$context.identity.sourceIp", "requestTime":"$context.requestTime", "httpMethod":"$context.httpMethod","routeKey":"$context.routeKey", "status":"$context.status","protocol":"$context.protocol", "integrationStatus": $context.integrationStatus, "integrationLatency": $context.integrationLatency, "responseLength":"$context.responseLength" }'
+      MethodSettings:
+        - ResourcePath: "/*"
+          LoggingLevel: INFO
+          HttpMethod: "*"
+          DataTraceEnabled: True
+      
+      Cors:
+        AllowHeaders:
+          - '*'
+
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+
+        AllowOrigin:
+          - '*'
+
+  BackendRestAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Dev
+      TracingEnabled: true
+
+      # Auth:
+      #   DefaultAuthorizer: AuthorizerFunction
+      #   Authorizers:
+      #     AuthorizerFunction:
+      #       FunctionArn: !GetAtt AuthorizerFunction.Arn
+      #       Identity:
+      #         Headers:
+      #           - Authorization
+
+  # RegisterAPI:
+  #   Type: AWS::Serverless::Api
+  #   Properties:
+  #     StageName: Dev
+  #     TracingEnabled: true
+  #     MethodSettings:
+  #       POST:
+  #         Path: /regis
+  #         LoggingLevel: INFO
+  #         Integration:
+  #           Type: AWS_PROXY
+  #           Uri: !Ref RegisterFunction
+  #         AuthorizationType: NONE
+
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/authentication/
+      Handler: login.lambdHandler
+      Description: Handler for Lambda authorizer
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          APPLICATION_CLIENT_ID: !Ref UserPoolClient
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
+          
+  RegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/authentication/
+      Handler: register.lambdaHandler
+      Description: handle register operation
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+          #USER_POOL_ID: !Ref UserPool
+          #3APPLICATION_CLIENT_ID: !Ref UserPoolClient
+          #STUDENT_GROUP_NAME: !Ref UserPoolStudentGroupName
+          #TEACHER_GROUP_NAME: !Ref UserPoolTeacherGroupName
+          #ADMIN_GROUP_NAME: !Ref UserPoolAdminGroupName
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
+      
+      
+      Policies:
+        #- AdminAddUserToGroupPolicy
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      # FunctionUrlConfig:
+      #   AuthType: NONE
+      #   InvokeMode: BUFFERED
+
+      Events:
+        ApiEvent:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /regis
+            Method: post
+            RestApiId: !Ref BackendRestAPI
+
+  # AdminAddUserToGroupPolicy:
+  #   Type: AWS::IAM::Policy
+  #   Properties:
+  #     PolicyName: !Sub ${AWS::StackName}-AdminAddUserToGroupPolicy
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Action:
+  #             - iam:AdminAddUserToGroupCommand
+  #           Resource: '*'
+
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/authentication/
+      Handler: login.lambdaHandler
+      Description: handle login operation
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          APPLICATION_CLIENT_ID: !Ref UserPoolClient
+          STUDENT_GROUP_NAME: !Ref UserPoolStudentGroupName
+          TEACHER_GROUP_NAME: !Ref UserPoolTeacherGroupName
+          ADMIN_GROUP_NAME: !Ref UserPoolAdminGroupName
+            
+
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
+
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: BUFFERED
+
+  ActivityTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ActivityTable
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSISK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSISK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 1
+
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSISK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 2
+            WriteCapacityUnits: 1
+
+  GetPersonalDataByEmailFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: services/activity/
+      Handler: getPersonalDataByEmail.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /data/{email}
+            Method: get
+            RestApiId: !Ref BackendRestAPI
+
+  GetPersonalDataBySchoolFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: services/activity/
+      Handler: getPersonalDataBySchool.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /{school}/{email}/data
+            Method: get
+            RestApiId: !Ref RestAPI
+            
+  GetPersonaListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: getPersonaList.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+            
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/list
+            Method: get
+            RestApiId: !Ref RestAPI
+
+  GetRecordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: getRecord.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/{email}/rec/{act_id}
+            Method: get
+            RestApiId: !Ref RestAPI
+
+  GetRecordListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: getRecordList.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/{email}/rec
+            Method: get
+            RestApiId: !Ref RestAPI
+  
+  GetStatisticFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: getStatistic.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/{email}/stat
+            Method: get
+            RestApiId: !Ref RestAPI
+  
+  GetStatisticListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: getStatisticList.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+          REGION : !Ref Region
+          SAMA_DATA_BUCKET : !Ref SamaDataBucket
+          
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/stat
+            Method: get
+            RestApiId: !Ref RestAPI
+
+  GetStatisticDownloadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/excelGeneration/
+      Handler: getStatisticDownloadUrl.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+          SAMA_DATA_BUCKET: !Ref SamaDataBucket
+          REGION: !Ref Region
+
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+        - S3CrudPolicy:
+            BucketName: !Ref SamaDataBucket
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/file
+            Method: get
+            RestApiId: !Ref RestAPI
+
+  PostRecordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: createRecord.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/{email}/rec
+            Method: post
+            RestApiId: !Ref RestAPI
+
+  PutRecordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: updateRecord.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/{email}/rec/{act_id}
+            Method: post
+            RestApiId: !Ref RestAPI
+
+  DeleteRecordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: services/activity/
+      Handler: deleteRecord.lambdaHandler
+
+      Environment:
+        Variables:
+          ACT_TABLE: !Ref ActivityTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityTable
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{school}/{email}/recDel/{act_id}
+            Method: post
+            RestApiId: !Ref RestAPI
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties: 
+      UserPoolName: !Sub ${AWS::StackName}-UserPool
+
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: false
+
+      AdminCreateUserConfig: 
+        AllowAdminCreateUserOnly: true
+
+      AutoVerifiedAttributes: 
+        - email
+      Schema: 
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      UsernameAttributes: 
+        - email
+      UserPoolTags:
+          Key: email
+          Value: !Sub ${AWS::StackName} User Pool
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties: 
+      ClientName: 
+        !Sub ${AWS::StackName}UserPoolClient
+      ExplicitAuthFlows: 
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      RefreshTokenValidity: 30
+      SupportedIdentityProviders: 
+        - COGNITO
+      UserPoolId: !Ref UserPool
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - 'code'
+      AllowedOAuthScopes:
+        - 'email'
+        - 'openid'
+      CallbackURLs:
+        - 'http://localhost'
+
+  StudentUserPoolGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: User group for student
+      GroupName: !Ref UserPoolStudentGroupName
+      Precedence: 0
+      UserPoolId: !Ref UserPool
+
+  TeacherUserPoolGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: User group for teacher
+      GroupName: !Ref UserPoolTeacherGroupName
+      Precedence: 1
+      UserPoolId: !Ref UserPool
+
+  AdminUserPoolGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: User group for admin
+      GroupName: !Ref UserPoolAdminGroupName
+      Precedence: 2
+      UserPoolId: !Ref UserPool
+
+  ApiGatewayAccountLoggingSettings:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiLoggingRole.Arn
+
+  ApiLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  AccessLogs:
+    Type: AWS::Logs::LogGroup
+    DependsOn: ApiLoggingRole
+    Properties:
+      RetentionInDays: 30
+      LogGroupName: !Sub "/${AWS::StackName}/APIAccessLogs"
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  SamaAPI:
+    Description: API Gateway endpoint URL for Dev stage for sama
+    Value: !Sub "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/Dev"
+
+  BackendAPO:
+    Description: API Gateway endpoint URL for Dev stage, for backend only
+    Value: !Sub "https://${BackendRestAPI}.execute-api.${AWS::Region}.amazonaws.com/Dev"
+
+  ActivityTable:
+    Description: Activity table used for storing and managing student record
+    Value: !Ref ActivityTable
+
+  GetPersonalDataByEmailFunction:
+    Description: Get pesonal data in table (GET)
+    Value: !Ref GetPersonalDataByEmailFunction
+
+  GetPersonalDataBySchoolFunction:
+    Description: Get pesonal data in table using school as a path (GET)
+    Value: !Ref GetPersonalDataBySchoolFunction
+  
+  GetPersonaListFunction:
+    Description: Get list of person in that type in school (GET)
+    Value: !Ref GetPersonaListFunction
+
+  GetRecordFunction:
+    Description: Get record by Id (GET)
+    Value: !Ref GetRecordFunction
+
+  GetRecordListFunction:
+    Description: Get record by type or flag, using email (GET)
+    Value: !Ref GetRecordListFunction
+
+  GetStatisticListFunction:
+    Description: Get statistic list (GET)
+    Value: !Ref GetStatisticListFunction
+
+  CreateRecordFunction:
+    Description: Create record (POST)
+    Value: !Ref PostRecordFunction
+  
+  UpdateRecordFunction:
+    Description: Update a record (PUT)
+    Value: !Ref PutRecordFunction
+
+  DeleteRecordFunction:
+    Description: Delete record, using id (DELETE)
+    Value: !Ref DeleteRecordFunction
+
+  CognitoLoginURL:
+    Description: Cognito User Pool Application Client Hosted Login UI URL
+    Value: !Sub 'https://${UserPoolClient}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${UserPoolClient}&response_type=code&redirect_uri=http://localhost'
+
+  LoginFunctionURL:
+    Description: HTTP url for login function
+    Value: !Ref LoginFunction
+  
+  RegisterFunctionURL:
+    Description: HTTP url for register function
+    Value: !Ref RegisterFunction
+
+  
