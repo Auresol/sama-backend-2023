@@ -1,9 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  sama-backend-aws
-
-  Sample SAM Template for sama-backend-aws
+  sama-backend-aws application, currently handle all backend operation except authentication (using firebase)
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -72,6 +70,9 @@ Resources:
 
         AllowOrigin:
           - '*'
+          
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
 
   BackendRestAPI:
     Type: AWS::Serverless::Api
@@ -167,7 +168,7 @@ Resources:
     Properties:
       CodeUri: services/activity/authentication/
       Handler: login.lambdaHandler
-      Description: handle login operation
+      Description: handle login operation, use backend 
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
@@ -175,7 +176,6 @@ Resources:
           STUDENT_GROUP_NAME: !Ref UserPoolStudentGroupName
           TEACHER_GROUP_NAME: !Ref UserPoolTeacherGroupName
           ADMIN_GROUP_NAME: !Ref UserPoolAdminGroupName
-            
 
       Tags:
         Stack: !Sub "${AWS::StackName}"
@@ -188,6 +188,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: ActivityTable
+
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
@@ -204,9 +206,6 @@ Resources:
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
 
       GlobalSecondaryIndexes:
         - IndexName: GSI1
@@ -217,10 +216,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 1
-
         - IndexName: GSI2
           KeySchema:
             - AttributeName: GSI2PK
@@ -229,15 +224,13 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 2
-            WriteCapacityUnits: 1
 
   GetPersonalDataByEmailFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: services/activity/
       Handler: getPersonalDataByEmail.lambdaHandler
+      Description: get personal data by email, callable by backend only
 
       Environment:
         Variables:
@@ -253,12 +246,15 @@ Resources:
             Path: /data/{email}
             Method: get
             RestApiId: !Ref BackendRestAPI
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
 
   GetPersonalDataBySchoolFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: services/activity/
       Handler: getPersonalDataBySchool.lambdaHandler
+      Description: get personal data by school
 
       Environment:
         Variables:
@@ -274,12 +270,15 @@ Resources:
             Path: /{school}/{email}/data
             Method: get
             RestApiId: !Ref RestAPI
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
             
   GetPersonaListFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: getPersonaList.lambdaHandler
+      Description: get list of persona in the school
 
       Environment:
         Variables:
@@ -295,12 +294,15 @@ Resources:
             Path: /{school}/list
             Method: get
             RestApiId: !Ref RestAPI
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
 
   GetRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: getRecord.lambdaHandler
+      Description: get single record via record id
 
       Environment:
         Variables:
@@ -316,12 +318,15 @@ Resources:
             Path: /{school}/{email}/rec/{act_id}
             Method: get
             RestApiId: !Ref RestAPI
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
 
   GetRecordListFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: getRecordList.lambdaHandler
+      Description: get record list by condition
 
       Environment:
         Variables:
@@ -337,12 +342,15 @@ Resources:
             Path: /{school}/{email}/rec
             Method: get
             RestApiId: !Ref RestAPI
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
   
   GetStatisticFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: getStatistic.lambdaHandler
+      Description: get a single statistic from student
 
       Environment:
         Variables:
@@ -358,12 +366,15 @@ Resources:
             Path: /{school}/{email}/stat
             Method: get
             RestApiId: !Ref RestAPI
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
   
   GetStatisticListFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: getStatisticList.lambdaHandler
+      Description: get list of statistic from school
 
       Environment:
         Variables:
@@ -382,12 +393,15 @@ Resources:
             Path: /{school}/stat
             Method: get
             RestApiId: !Ref RestAPI
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
 
   GetStatisticDownloadUrlFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/excelGeneration/
       Handler: getStatisticDownloadUrl.lambdaHandler
+      Description: create excel, then return presigned URL for access
 
       Environment:
         Variables:
@@ -409,11 +423,15 @@ Resources:
             Method: get
             RestApiId: !Ref RestAPI
 
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
+
   PostRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: createRecord.lambdaHandler
+      Description: create new record while generating id
 
       Environment:
         Variables:
@@ -430,11 +448,15 @@ Resources:
             Method: post
             RestApiId: !Ref RestAPI
 
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
+
   PutRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: updateRecord.lambdaHandler
+      Description: edit the record
 
       Environment:
         Variables:
@@ -451,11 +473,15 @@ Resources:
             Method: post
             RestApiId: !Ref RestAPI
 
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
+
   DeleteRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: services/activity/
       Handler: deleteRecord.lambdaHandler
+      Description: delete record
 
       Environment:
         Variables:
@@ -471,6 +497,9 @@ Resources:
             Path: /{school}/{email}/recDel/{act_id}
             Method: post
             RestApiId: !Ref RestAPI
+
+      Tags:
+        Stack: !Sub "${AWS::StackName}"
 
   UserPool:
     Type: AWS::Cognito::UserPool
@@ -555,7 +584,7 @@ Resources:
       CloudWatchRoleArn: !GetAtt ApiLoggingRole.Arn
 
   ApiLoggingRole:
-    Type: AWS::IAM::Role
+    Type: AWS::IAM::Role      
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"

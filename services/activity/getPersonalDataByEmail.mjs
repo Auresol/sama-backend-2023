@@ -13,30 +13,27 @@ export const lambdaHandler = async (event, context) => {
 
     let command;
     
-    try{
-        //Get email from path
-        const requestPath = event.pathParameters;     
-        const email = requestPath.email;
+    //Get email from path
+    const requestPath = event.pathParameters;     
+    const email = requestPath.email;
 
-        command = {
-            TableName: tableName,
-            IndexName: "GSI1",
-            KeyConditionExpression: "GSI1PK = :email AND GSISK = :datas",
-            ExpressionAttributeValues: {
-                ":email" : email,
-                ":datas" : "DATA"
-            },
-
-        };
-    }catch (error){
-
-        return ({
-            "statusCode": 400,
-            "body": "Error : " + error,
-            "headers" : headers
-        });       
+    command = {
+        TableName: tableName,
+        IndexName: "GSI1",
+        KeyConditionExpression: "GSI1PK = :email AND GSISK = :datas",
+        ExpressionAttributeValues: {
+            ":email" : email,
+            ":datas" : "DATA"
+        },
 
     }
+
+
+    return ({
+        "statusCode": 400,
+        "body": "Error : " + error,
+        "headers" : headers
+    });       
 
     let response;
 
@@ -51,7 +48,7 @@ export const lambdaHandler = async (event, context) => {
             
             response = await client.send(new QueryCommand(command));
         }
-        
+    
     } catch (error) {
 
         //console.error("DynamoDB GSI1 Error:", error);
@@ -79,7 +76,6 @@ export const lambdaHandler = async (event, context) => {
         "body": "Not Found",
         "headers" : headers
     });
-
 
 };
 
