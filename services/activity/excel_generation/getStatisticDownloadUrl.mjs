@@ -1,12 +1,11 @@
 import client from './samaDBConnect.mjs';
 
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-
 import { S3Client, GetObjectCommand, PutObjectCommand  } from "@aws-sdk/client-s3";
 import { QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 const ExcelJS = require('exceljs');
 
 async function allActStructGetter(tableName, school){
@@ -31,14 +30,14 @@ async function allActStructGetter(tableName, school){
 
     if(getAllActStructResponse.Item == undefined){
 
-        throw new Error("Item doesn't exist");           
+        throw new Error("Item doesn't exist");      
         
     }  
 
-    let all_act_struct = [];
+    let all_act_struct = {};
     
     for(const item in getAllActStructResponse.Item){
-        if(item.startsWith("act")){
+        if(item.startsWith("act") && item != "act_amount"){
 
             const act_type = item.split("_")[1];
             all_act_struct[act_type] = getAllActStructResponse.Item[item];
@@ -112,10 +111,10 @@ export const lambdaHandler = async (event, context) => {
     // Upload the Excel file to S3
     const s3Client = new S3Client({ region : region });
 
-    let uploadKey = 'statistic_excel/' + school + '/stat_ALL.xlsx';
+    let uploadKey = school + '/statistic_excel/stat_ALL.xlsx';
     
     if(stat_type != "ALL"){
-        uploadKey = 'statistic_excel/' + school + '/stat_' + stat_type.replace("/",".") + '.xlsx';
+        uploadKey = school + '/statistic_excel/stat_' + stat_type.replace("/",".") + '.xlsx';
     }
 
     try {
@@ -155,16 +154,18 @@ export const lambdaHandler = async (event, context) => {
         
 };
 
+// function for generate presinged url to get access to excel
 const createPresignedUrlWithClient = ({ client, bucket, key }) => {
     const command = new GetObjectCommand({ Bucket: bucket, Key: key });
     return getSignedUrl(client, command, { expiresIn: 3600 });
 };
 
+// function for generate an excel file depend on request type
 function excelGeneration(stat_type, raw_data, all_act_struct){
 
     const workbook = new ExcelJS.Workbook();
 
-    const columnProperties = columnsGeneration();
+    const columnProperties = columnsGeneration(all_act_struct);
 
     const stat_data = dataClassifier(raw_data, all_act_struct);
     
@@ -322,7 +323,7 @@ function dataClassifier(raw_data, all_act_struct){
 };
 
 // function for create column in each pages
-function columnsGeneration(){
+function columnsGeneration(all_act_struct){
 
     let columnProperties = [
         {

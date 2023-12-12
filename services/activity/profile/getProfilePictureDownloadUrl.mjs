@@ -1,6 +1,8 @@
 import client from './samaDBConnect.mjs';
-import outputTransform from './miscellaneous.mjs';
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
+
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const lambdaHandler = async (event, context) => {
 
@@ -10,6 +12,10 @@ export const lambdaHandler = async (event, context) => {
     };
 
     const tableName = process.env.ACT_TABLE;
+    const region = process.env.REGION;
+    const samaDataBucket = process.env.SAMA_DATA_BUCKET;
+
+
 
     let command;
     
@@ -53,24 +59,48 @@ export const lambdaHandler = async (event, context) => {
 
     }
 
-    if(response.Count == 1){
-
-        const returnBody = outputTransform(response.Items);
+    if(response.Count != 1){
 
         return ({
-            "statusCode": 200,
-            "body": JSON.stringify(returnBody),
+            "statusCode": 400,
+            "body": "Not Found",
             "headers" : headers
         });
     }
 
+    const school = response.Items[0].PK;
+
+    // if(response.Items[0].profile_img_path == undefined){
+    //     return ({
+    //         "statusCode": 400,
+    //         "body": "No profile",
+    //         "headers" : headers
+    //     });
+    // }
+
+    const uploadKey = school + '/profile_pic/' + email + '.profile';
+
+    const clientUrl = await createPresignedUrlWithClient({
+        region: region,
+        bucket: samaDataBucket,
+        key: uploadKey,
+    });
+
+    let returnMessage = "Dowload";
+
     return ({
-        "statusCode": 400,
-        "body": "Not Found",
+        "statusCode": 200,
+        "body": JSON.stringify({"Message" : returnMessage, "Url" : clientUrl}),
         "headers" : headers
     });
 
+
 };
 
+const createPresignedUrlWithClient = ({ region, bucket, key }) => {
+    const client = new S3Client({ region });
+    const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+    return getSignedUrl(client, command, { expiresIn: 3600 });
+};
 
 

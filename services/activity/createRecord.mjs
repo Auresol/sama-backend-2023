@@ -31,7 +31,7 @@ async function allActStructGetter(tableName, school){
     let all_act_struct = {};
     
     for(const item in getAllActStructResponse.Item){
-        if(item.startsWith("act")){
+        if(item.startsWith("act") && item != "act_amount"){
 
             const act_type = item.split("_")[1];
             all_act_struct[act_type] = getAllActStructResponse.Item[item];
