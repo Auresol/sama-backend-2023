@@ -1,93 +1,52 @@
 import client from './samaDBConnect.mjs';
 
+import { S3Client, GetObjectCommand, PutObjectCommand  } from "@aws-sdk/client-s3";
+import { QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-
-import { S3Client, GetObjectCommand, PutObjectCommand  } from "@aws-sdk/client-s3";
-import { QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { error } from 'console';
-
 const ExcelJS = require('exceljs');
 
-const all_act_struct = {
+async function allActStructGetter(tableName, school){
 
-    "01" : {
-        act_name : "การบำเพ็ญประโยชน์ต่อสังคม",
-        act_unit : "ชั่วโมง",
-        max : 15
-    },
-    "02" : {
-        act_name : "การบำเพ็ญประโยชน์ต่อโรงเรียน",
-        act_unit : "ชั่วโมง",
-        max : 10
-    },
-    
-    "03" : {
-        act_name : "การอ่านหนังสือ",
-        act_unit : "เล่ม",
-        max : 5
-    },
-    "04" : {
-        act_name : "การเข้าค่ายวิชาการ",
-        act_unit : "ครั้ง",
-        max : 1,
-        priority : -1
-    },
-    "05" : {
-        act_name : "การเข้าค่ายปฎิบัติธรรม",
-        act_unit : "ครั้ง",
-        max : 1,
-        priority : -1
-    },
-    "06" : {
-        act_name : "การศึกษาดูงานด้านคณิตศาสตร์ วิทยศาสตร์และเทคโนโลยี",
-        act_unit : "ครั้ง",
-        max : 1,
-        priority : -1
-    },
-    "07" : {
+    const getAllActStructCommand = {
+        TableName: tableName,
+        Key : {
+            PK: school,
+            SK: "DATA"
+        }
+    };
 
-        act_name : "การศึกษาดูงานด้านสังคมศึกษา ภาษา ศาสนา ศิลปวัฒนธรรมและโบราณคดี",
-        act_unit : "ครั้ง",
-        max : 1,
-        priority : -1
-    },
-    "08" : {
-        act_name : "การฟังบรรยายด้านวิทยศาสตร์และเทคโนโลยี",
-        act_unit : "ครั้ง",
-        max : 1,
-        priority : -1
-    },
-    "09" : {
-        act_name : "การฟังบรรยายด้านพัฒนาบุคลิกภาพและความฉลาดทางอารมณ์",
-        act_unit : "ครั้ง",
-        max : 1,
-        priority : -1
-    },
-    "10" : {
-        act_name : "การฟังบรรยายด้านสังคมศึกษา ศาสนา ศิลปวัฒนธรรมและดนตรี",
-        act_unit : "ครั้ง",
-        max : 1,
-        priority : -1
-    },
-    "11" : {
-        act_name : "การเข้าร่วมกิจกรรมชุมนุม",
-        act_unit : "ครั้ง",
-        max : 1
-    },
-    "12" : {
-        act_name : "การออกกำลังกายและการเล่นกีฬา",
-        act_unit : "ครั้ง",
-        max : 40
-    },
-    "13" : {
-        act_name : "การเข้าร่วมกิจกรรมพบพ่อครู/แม่ครู",
-        act_unit : "ครั้ง",
-        max : 90
+    let getAllActStructResponse;
+
+    try{
+
+        getAllActStructResponse = await client.send(new GetCommand(getAllActStructCommand));
+
+    }catch (error){
+        throw new Error(error);
     }
 
-};
+    if(getAllActStructResponse.Item == undefined){
+
+        throw new Error("Item doesn't exist");      
+        
+    }  
+
+    let all_act_struct = {};
+    
+    for(const item in getAllActStructResponse.Item){
+        if(item.startsWith("act") && item != "act_amount"){
+
+            const act_type = item.split("_")[1];
+            all_act_struct[act_type] = getAllActStructResponse.Item[item];
+        }
+    }
+
+    return all_act_struct;
+
+}
 
 export const lambdaHandler = async (event, context) => {
 
@@ -96,120 +55,124 @@ export const lambdaHandler = async (event, context) => {
         'Access-Control-Allow-Origin': '*'
     };
 
+    const tableName = process.env.ACT_TABLE;
+    const region = process.env.REGION;
+    const samaDataBucket = process.env.SAMA_DATA_BUCKET;
+
+    const requestPath = event.pathParameters;
+    const requestQueryString = event.queryStringParameters;     
+
+    const school = requestPath.school;                  //Require
+
+    let stat_type;                                           //Require
+
     try{
-        const tableName = process.env.ACT_TABLE;
-        const region = process.env.REGION;
-        const samaDataBucket = process.env.SAMA_DATA_BUCKET;
-
-        const requestPath = event.pathParameters;
-        const requestQueryString = event.queryStringParameters;     
-
-        const school = requestPath.school;                  //Require
-
-        let stat_type;                                           //Require
-
-        try{
-            stat_type = requestQueryString.type;
-            
-        }catch{
-
-            stat_type = "ALL";
-
-        }
-
-        const getStaticListCommand = {
-            
-            TableName: tableName,
-            KeyConditionExpression: "PK = :school AND begins_with(SK, :type)",
-            ExpressionAttributeValues: {
-                ":school" : school,
-                ":type" : "STD"
-            },
-
-        };
-
-
-        const getStaticListResponse = await client.send(new QueryCommand(getStaticListCommand));
-
-        // create a workbook
-        const workbook = excelGeneration(stat_type, getStaticListResponse.Items);
-
-        // Save the Excel file to a buffer
-        const buffer = await workbook.xlsx.writeBuffer();
-
-        // Upload the Excel file to S3
-        const s3Client = new S3Client({ region : region });
-
-        let uploadKey = 'statistic_excel/' + school + '/stat_ALL.xlsx';
+        stat_type = requestQueryString.type;
         
-        if(stat_type != "ALL"){
-            uploadKey = 'statistic_excel/' + school + '/stat_' + stat_type.replace("/",".") + '.xlsx';
-        }
+    }catch{
 
-        try {
-            
-            const putExcelCommand = new PutObjectCommand({
+        stat_type = "ALL";
 
-                Bucket : samaDataBucket,
-                Key : uploadKey,
-                Body : buffer 
-                
-            });
+    }
 
-            const putExcelResponse = await s3Client.send(putExcelCommand);
+    let all_act_struct;
 
-        } catch (error) {
+    try{
+        all_act_struct = await allActStructGetter(tableName, school);
 
-            return ({
-                "statusCode": 400,
-                "body": "Upload uncsuccessful : " + error,
-                "headers" : headers
-            });
-
-        }
-
-        const clientUrl = await createPresignedUrlWithClient({
-            client: s3Client,
-            bucket: samaDataBucket,
-            key: uploadKey,
-        });
-
-        return ({
-            "statusCode": 200,
-            "body": JSON.stringify({ status : "Success", url : clientUrl}),
-            "headers" : headers
-        });
-
-        
     }catch (error){
+        return ({
+            "statusCode": 400,
+            "body": "get act stuct error :" + error.message,
+            "headers" : headers
+        });       
+    }
+
+    const getStaticListCommand = {
+        
+        TableName: tableName,
+        KeyConditionExpression: "PK = :school AND begins_with(SK, :type)",
+        ExpressionAttributeValues: {
+            ":school" : school,
+            ":type" : "STD"
+        },
+
+    };
+
+
+    const getStaticListResponse = await client.send(new QueryCommand(getStaticListCommand));
+
+    // create a workbook
+    const workbook = excelGeneration(stat_type, getStaticListResponse.Items, all_act_struct);
+
+    // Save the Excel file to a buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    // Upload the Excel file to S3
+    const s3Client = new S3Client({ region : region });
+
+    let uploadKey = school + '/statistic_excel/stat_ALL.xlsx';
+    
+    if(stat_type != "ALL"){
+        uploadKey = school + '/statistic_excel/stat_' + stat_type.replace("/",".") + '.xlsx';
+    }
+
+    try {
+        
+        const putExcelCommand = new PutObjectCommand({
+
+            Bucket : samaDataBucket,
+            Key : uploadKey,
+            Body : buffer 
+            
+        });
+
+        const putExcelResponse = await s3Client.send(putExcelCommand);
+
+    } catch (error) {
 
         return ({
             "statusCode": 400,
-            "body": "Error : " + error,
+            "body": "Upload uncsuccessful : " + error,
             "headers" : headers
         });
+
     }
+
+    const clientUrl = await createPresignedUrlWithClient({
+        client: s3Client,
+        bucket: samaDataBucket,
+        key: uploadKey,
+    });
+
+    return ({
+        "statusCode": 200,
+        "body": JSON.stringify({ status : "Success", url : clientUrl}),
+        "headers" : headers
+    });
             
         
 };
 
+// function for generate presinged url to get access to excel
 const createPresignedUrlWithClient = ({ client, bucket, key }) => {
     const command = new GetObjectCommand({ Bucket: bucket, Key: key });
     return getSignedUrl(client, command, { expiresIn: 3600 });
 };
 
-function excelGeneration(stat_type, raw_data){
+// function for generate an excel file depend on request type
+function excelGeneration(stat_type, raw_data, all_act_struct){
 
     const workbook = new ExcelJS.Workbook();
 
-    const columnProperties = columnsGeneration();
+    const columnProperties = columnsGeneration(all_act_struct);
 
-    const stat_data = dataClassifier(raw_data);
+    const stat_data = dataClassifier(raw_data, all_act_struct);
     
     if(stat_type == "ALL"){
 
         for(const year in stat_data){
-            pageCreater(workbook, columnProperties, stat_data[year], year);
+            pageCreater(workbook, columnProperties, stat_data[year], year, all_act_struct);
         }
 
     }else{
@@ -219,13 +182,13 @@ function excelGeneration(stat_type, raw_data){
         const classroom = stat_type_split[1];
 
         if(stat_data[classyear][classroom] == undefined){
-            throw "Not a single human begin present here";
+            throw new Error("Not a single human being presented here");
         }
 
         const temp = {};
         temp[classroom] = stat_data[classyear][classroom];
         
-        pageCreater(workbook, columnProperties, temp, classyear);
+        pageCreater(workbook, columnProperties, temp, classyear, all_act_struct);
 
     }
 
@@ -233,7 +196,38 @@ function excelGeneration(stat_type, raw_data){
 
 }
 
-function dataClassifier(raw_data){
+// function for rearrange data into new, usable format
+// OLD FORMAT :
+//  [
+//      SK : {
+//          id : id
+//          name : name
+//          number : number
+//          stat_xx : [x,x,x,x]  
+//      },
+//  ]
+//
+// NEW FORMAT : 
+//  [
+//      year : {
+//          room : {
+//              data : [    --> stat for each student, sorted by their number
+//                  {
+//                      id : id
+//                      names : names
+//                      number : number
+//                      xx : accept amoutn of that act
+//                  }
+//              ],
+//              stat : {     --> stat for that year/room
+//                  names : "สรุป " + year + "/" + room
+//                  xx : finish % of that act
+//              }
+//          }
+//       }
+//  ]
+
+function dataClassifier(raw_data, all_act_struct){
 
     let classify_data = {};
     let stat_unfinish = {};
@@ -271,7 +265,7 @@ function dataClassifier(raw_data){
 
             if(statwise.startsWith("stat")){
                 
-                // act_id_temp = xx 
+                // act_id_temp = xx , INT
                 const act_id_temp = statwise.split("_")[1];
 
                 // ACCEPT only
@@ -328,7 +322,8 @@ function dataClassifier(raw_data){
     return classify_data;
 };
 
-function columnsGeneration(){
+// function for create column in each pages
+function columnsGeneration(all_act_struct){
 
     let columnProperties = [
         {
@@ -357,7 +352,7 @@ function columnsGeneration(){
         if("priority" in act && act.priority == -1){
 
             lowPriorityColumnProperties.push({
-                'header' : act.act_name + " ( /" + act.max + " " + act.act_unit + ")",
+                'header' : act.act_name + " ( /" + act.max + " " + act.unit + ")",
                 'key' : actNum,
                 'width' : 20,
                 'height' : 30
@@ -366,7 +361,7 @@ function columnsGeneration(){
         }else{
 
             columnProperties.push({
-                'header' : act.act_name + " ( /" + act.max + " " + act.act_unit + ")",
+                'header' : act.act_name + " ( /" + act.max + " " + act.unit + ")",
                 'key' : actNum,
                 'width' : 20,
                 'height' : 30
@@ -381,8 +376,8 @@ function columnsGeneration(){
 
 }
 
-
-function pageCreater(workbook, columnsProperties, std_data, year){
+// function for create all page in excel, including data
+function pageCreater(workbook, columnsProperties, std_data, year, all_act_struct){
 
     const worksheetProperties = {
         views : [
