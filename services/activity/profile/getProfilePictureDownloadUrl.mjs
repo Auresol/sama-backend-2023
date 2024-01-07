@@ -78,7 +78,7 @@ export const lambdaHandler = async (event, context) => {
     //     });
     // }
 
-    const uploadKey = school + '/profile_pic/' + email + '.profile';
+    const uploadKey = school + '/profile_pic/' + email.replace("@", ".") + '.jpeg';
 
     const clientUrl = await createPresignedUrlWithClient({
         region: region,

@@ -114,7 +114,6 @@ export const lambdaHandler = async (event, context) => {
 
     }else{
 
-
         // Section 2 Specify a type
         const prefix = act_type + (flag == undefined? "":"_" + flag);
         

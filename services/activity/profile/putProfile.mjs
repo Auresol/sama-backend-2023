@@ -26,6 +26,7 @@ export const lambdaHandler = async (event, context) => {
     let new_classroom = requestBody.new_classroom;
     let new_number = requestBody.new_number;
 
+    // Query for all item
     command = {
         TableName: tableName,
         IndexName: "GSI1",
@@ -69,6 +70,57 @@ export const lambdaHandler = async (event, context) => {
             "headers" : headers
         });
     }
+
+    if(new_email != undefined){
+
+        // Check if new_email exist, if there's new_email in request
+        let checkIfExmailAlreadyExistCommand = {
+            TableName: tableName,
+            IndexName: "GSI1",
+            KeyConditionExpression: "GSI1PK = :email AND GSISK = :datas",
+            ExpressionAttributeValues: {
+                ":email" : new_email,
+                ":datas" : "DATA"
+            },
+
+        }
+
+        let checkIfExmailAlreadyExistResponse;
+
+        try {
+
+            checkIfExmailAlreadyExistResponse = await client.send(new QueryCommand(checkIfExmailAlreadyExistCommand));
+            
+            if(checkIfExmailAlreadyExistResponse.Count == 0){
+
+                checkIfExmailAlreadyExistCommand.IndexName = "GSI2";
+                checkIfExmailAlreadyExistCommand.KeyConditionExpression = "GSI2PK = :email AND GSISK = :datas",
+                
+                checkIfExmailAlreadyExistResponse = await client.send(new QueryCommand(checkIfExmailAlreadyExistCommand));
+            }
+        
+        } catch (error) {
+
+            //console.error("DynamoDB GSI1 Error:", error);
+            return ({
+                "statusCode": 400,
+                "body": "DynamoDB Error (query to see if email exist) :" + error,
+                "headers" : headers
+            });
+
+        }
+
+        if(checkIfExmailAlreadyExistResponse.Count > 0){
+
+            return ({
+                "statusCode": 400,
+                "body": "Email already exists",
+                "headers" : headers
+            });
+        }
+    }
+
+    // Change all the data
 
     let personal_data_item = response.Items.pop();
 
@@ -114,6 +166,8 @@ export const lambdaHandler = async (event, context) => {
 
     }
 
+    console.log("DATA delete successful");
+
     // delete all record
     let batchNumber = 0;
     for (const chunk of itemChuck) {
@@ -153,11 +207,11 @@ export const lambdaHandler = async (event, context) => {
 
     // recreating new DATA
     personal_data_item.SK = new_DATA_SK;
-    personal_data_item.id = new_id;
-    personal_data_item.number = new_number;
 
     if(type == "STD"){
         personal_data_item.GSI1PK = new_email;
+        personal_data_item.number = new_number;
+        personal_data_item.id = new_id;
 
     }else{
         personal_data_item.GSI2PK = new_email;
@@ -181,11 +235,13 @@ export const lambdaHandler = async (event, context) => {
 
     }
 
+    console.log("DATA put successful");
+
     // recreating all record
     batchNumber = 0;
     for (const chunk of itemChuck) {
 
-        let putRequests = {};
+        let putRequests = [];
 
         for(let new_item of chunk){
 
@@ -210,7 +266,7 @@ export const lambdaHandler = async (event, context) => {
                 }
             }
 
-            putRequests.push({PutRequest : {Item : {new_item}} });
+            putRequests.push({PutRequest : {Item : new_item} });
 
         }
     
@@ -226,7 +282,7 @@ export const lambdaHandler = async (event, context) => {
 
         if(batchPutResponse.UnprocessedItems != {}){
             console.log("Batch : " + batchNumber + " -> unprocessed items :");
-            console.log(batchDeleteResponse.UnprocessedItems);
+            console.log(batchPutResponse.UnprocessedItems);
 
         }else{
             console.log("Batch : " + batchNumber + " -> OK");
@@ -234,6 +290,8 @@ export const lambdaHandler = async (event, context) => {
         }
 
     }
+
+    console.log("RECREATION COMPLETE");
 
     return ({
         "statusCode": 400,

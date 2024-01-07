@@ -69,7 +69,7 @@ export const lambdaHandler = async (event, context) => {
 
     const school = response.Items[0].PK;
 
-    const uploadKey = school + '/profile_pic/' + email + '.profile';
+    const uploadKey = school + '/profile_pic/' + email.replace("@", ".") + '.jpeg';
 
     const clientUrl = await createPresignedUrlWithClient({
         region: region,
