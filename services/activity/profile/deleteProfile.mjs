@@ -97,7 +97,7 @@ export const lambdaHandler = async (event, context) => {
     }
     
     return ({
-        "statusCode": 400,
+        "statusCode": 200,
         "body": "Delete account successful",
         "headers" : headers
     });

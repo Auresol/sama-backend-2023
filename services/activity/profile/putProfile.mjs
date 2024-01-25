@@ -1,6 +1,8 @@
 import client from './samaDBConnect.mjs';
 import { QueryCommand, BatchWriteCommand, DeleteCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 
+import { CopyObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+
 export const lambdaHandler = async (event, context) => {
 
     const headers = {
@@ -9,6 +11,8 @@ export const lambdaHandler = async (event, context) => {
     };
 
     const tableName = process.env.ACT_TABLE;
+    const region = process.env.REGION;
+    const samaDataBucket = process.env.SAMA_DATA_BUCKET;
 
     let command;
     
@@ -26,7 +30,7 @@ export const lambdaHandler = async (event, context) => {
     let new_classroom = requestBody.new_classroom;
     let new_number = requestBody.new_number;
 
-    // Query for all item
+    // Query for all itemNew Bookmark
     command = {
         TableName: tableName,
         IndexName: "GSI1",
@@ -118,6 +122,14 @@ export const lambdaHandler = async (event, context) => {
                 "headers" : headers
             });
         }
+
+        const renamePictureResponse = await renamePicture(school, email, new_email, region, samaDataBucket);
+
+        // if there's an error on the profile email chaning process, return
+        if(renamePictureResponse.statusCode == 400){
+            return renamePictureResponse;
+        }
+        
     }
 
     // Change all the data
@@ -294,7 +306,7 @@ export const lambdaHandler = async (event, context) => {
     console.log("RECREATION COMPLETE");
 
     return ({
-        "statusCode": 400,
+        "statusCode": 200,
         "body": "Update account successful",
         "headers" : headers
     });
@@ -316,6 +328,46 @@ function chunkArray25(myArray){
 
     return tempArray;
 };
+
+async function renamePicture(school, email, new_email, region, samaDataBucket){
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+    };
+
+    const old_key = school + '/profile_pic/' + email.replace("@", ".") + '.jpeg';
+    const new_key = school + '/profile_pic/' + new_email.replace("@", ".") + '.jpeg';
+
+    const s3client = new S3Client({ region });
+
+    try{
+        const response = await s3client.send(new CopyObjectCommand({
+            Bucket : samaDataBucket,
+            CopySource : samaDataBucket + '/' + old_key,
+            Key : new_key
+        }));
+
+    }catch(error){
+        console.log("Error copying profile : " + error);
+
+    }
+
+    try {
+        const response = await s3client.send(new DeleteObjectCommand({
+            Bucket : samaDataBucket,
+            Key : old_key
+        }));
+
+    }catch(error){
+        console.log("Error deleting old profile : " + error);
+
+    }
+
+    return ({
+        "statusCode": 200
+    });
+}
 
 
 

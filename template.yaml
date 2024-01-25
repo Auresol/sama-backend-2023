@@ -173,6 +173,9 @@ Resources:
             RestApiId: !Ref BackendRestAPI
       Tags:
         Stack: !Sub ${AWS::StackName}
+      
+      
+
   GetPersonalDataBySchoolFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -199,19 +202,23 @@ Resources:
     Properties:
       CodeUri: services/activity/profile/
       Handler: putProfile.lambdaHandler
-      Description: edit profile, will edit only the variable in the body
+      Description: edit profile
       Environment:
         Variables:
           ACT_TABLE: !Ref ActivityTable
+          SAMA_DATA_BUCKET: !Ref SamaDataBucket
+          REGION: !Ref Region
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ActivityTable
+        - S3CrudPolicy:
+            BucketName: !Ref SamaDataBucket
       Events:
         ApiEvent:
           Type: Api
           Properties:
             Path: /{school}/{email}/profile
-            Method: put
+            Method: post
             RestApiId: !Ref RestAPI
       Tags:
         Stack: !Sub ${AWS::StackName}
@@ -233,8 +240,8 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
-            Path: /{school}/{email}/profile
-            Method: delete
+            Path: /{school}/{email}/profile/del
+            Method: get
             RestApiId: !Ref RestAPI
       Tags:
         Stack: !Sub ${AWS::StackName}
@@ -307,6 +314,8 @@ Resources:
             Path: /{school}/list
             Method: get
             RestApiId: !Ref RestAPI
+
+      
       Tags:
         Stack: !Sub ${AWS::StackName}
   GetRecordFunction:
@@ -349,6 +358,8 @@ Resources:
             Path: /{school}/{email}/rec
             Method: get
             RestApiId: !Ref RestAPI
+
+      
       Tags:
         Stack: !Sub ${AWS::StackName}
   GetStatisticFunction:
@@ -393,6 +404,7 @@ Resources:
             Path: /{school}/stat
             Method: get
             RestApiId: !Ref RestAPI
+      
       Tags:
         Stack: !Sub ${AWS::StackName}
   GetStatisticDownloadUrlFunction:
