@@ -155,7 +155,7 @@ Resources:
   GetPersonalDataByEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: getPersonalDataByEmail.lambdaHandler
       Description: get personal data by email, callable by backend only
       Environment:
@@ -179,7 +179,7 @@ Resources:
   GetPersonalDataBySchoolFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: getPersonalDataBySchool.lambdaHandler
       Description: get personal data by school
       Environment:
@@ -298,7 +298,7 @@ Resources:
   GetPersonaListFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: getPersonaList.lambdaHandler
       Description: get list of persona in the school
       Environment:
@@ -321,7 +321,7 @@ Resources:
   GetRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: getRecord.lambdaHandler
       Description: get single record via record id
       Environment:
@@ -342,7 +342,7 @@ Resources:
   GetRecordListFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: getRecordList.lambdaHandler
       Description: get record list by condition
       Environment:
@@ -365,7 +365,7 @@ Resources:
   GetStatisticFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: getStatistic.lambdaHandler
       Description: get a single statistic from student
       Environment:
@@ -386,7 +386,7 @@ Resources:
   GetStatisticListFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: getStatisticList.lambdaHandler
       Description: get list of statistic from school
       Environment:
@@ -435,7 +435,7 @@ Resources:
   PostRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: createRecord.lambdaHandler
       Description: create new record while generating id
       Environment:
@@ -456,7 +456,7 @@ Resources:
   PutRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: updateRecord.lambdaHandler
       Description: edit the record
       Environment:
@@ -477,7 +477,7 @@ Resources:
   DeleteRecordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: services/activity/
+      CodeUri: services/activity/record/
       Handler: deleteRecord.lambdaHandler
       Description: delete record
       Environment:
